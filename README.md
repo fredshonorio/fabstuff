@@ -1,5 +1,7 @@
 Additions to fabric
 
-Get: pip install git+https://github.com/fredshonorio/lace.git@develop
+Get:
 
-To install locally: pip install -e .
+`pip install git+https://github.com/fredshonorio/fabstuff.git`
+
+To install locally (dev): `pip install -e .`
