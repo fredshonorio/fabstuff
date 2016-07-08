@@ -1,5 +1,5 @@
 
-__all__ = ["services", "update"]
+__all__ = ["services", "update", "images"]
 
 #
 # Updating and listing ECS task definitions
@@ -8,7 +8,7 @@ __all__ = ["services", "update"]
 import sys, json
 from fabric.api import task, prompt, env, execute
 from fabric.contrib.console import confirm
-from fabric.colors import green
+from fabric.colors import green, yellow
 from pprint import pformat
 from time import sleep
 from run import run, capture
@@ -16,7 +16,7 @@ import cfg
 from subprocess import check_output
 
 @task(name="update-task")
-def update_task():
+def update_task_def():
     """Copies the most recent task definition (in ECS) to use a given docker image version. Reqs: version"""
 
     version = cfg.version(env)
@@ -27,9 +27,8 @@ def update_task():
     app_defs = filter(lambda d: ("task-definition/%s" % env.APP) in d, all_defs)
     last_def = sorted(app_defs, key=task_def_revision)[-1]
     last_pretty = pretty_def(last_def)
-    app_defs_str = "\n".join(app_defs)
 
-    confirm("Definition choices are:\n%(app_defs_str)s\n\nCreating definition based on\n\n\t%(last_pretty)s\n\nusing docker image version %(version)s\nContinue?""" % locals())
+    confirm("Creating definition based on\n\n\t%(last_pretty)s\n\nusing docker image version %(version)s\nContinue?""" % locals())
 
     old_def = json.loads(capture("aws ecs describe-task-definition --task-definition %s" % last_def))
     new_def = updated_def_from_old(old_def, image_name_from_version(version, env.DOCKER_REPO))
@@ -52,39 +51,104 @@ def services():
     print json.dumps(s, indent=2)
 
 @task
+def images():
+    """Lists ECS services"""
+
+    first = True
+    nextToken = None
+    imgs = []
+
+    while nextToken or first:
+        cmd = ["aws", "ecr", "list-images", "--repository-name", env.APP] + \
+              ([] if first else ["--next-token", nextToken])
+        out = check_output(cmd)
+        obj = json.loads(out)
+        imgs += obj["imageIds"]
+        nextToken = obj.get("nextToken")
+        first = False
+
+    images = sorted(filter(bool, map(lambda i: i.get("imageTag"), imgs)))
+
+    for i in images:
+        print i
+
+def get_desired_count(svc, cluster):
+    svc_out = check_output(["aws", "ecs", "describe-services",
+        "--service", svc,
+        "--cluster", cluster])
+    return int(json.loads(svc_out)["services"][0]["desiredCount"])
+
+@task
 def update():
     """Updates a docker cluster to a new revision. Reqs: version"""
 
-    execute(update_task)
-    capture("aws ecs update-service --cluster %s --service %s --task-definition %s" % (env.CLUSTER, env.SERVICE, env.APP))
-    execute(wait_for_revision)
+    execute(update_task_def)
 
-
-@task
-def wait_for_revision():
-    """Polls until one or more containers are running a given revision. Reqs: revision"""
+    desiredCount = max(1, get_desired_count(env.SERVICE, env.CLUSTER))
+    check_output(['aws', 'ecs', 'update-service',
+        '--cluster', env.CLUSTER,
+        '--service', env.SERVICE,
+        '--task-definition', env.APP])
 
     rev = cfg.revision(env)
-    pretty = green("%s:%d" % (env.APP, rev), bold=True)
-    print "Waiting for containers running revision %s" % pretty
-    revision_str = "task-definition/%s:%d" % (env.APP, rev)
+    uptodate = count_uptodate(env.APP, rev)
 
-    while True:
-        deployments = describe_service()["deployments"]
+    while uptodate < desiredCount:
+        expected = uptodate + 1
 
-        running_new_primaries = filter(
-            lambda x: x["status"] == "PRIMARY" \
-                and x["taskDefinition"].endswith(revision_str) \
-                and x["runningCount"] > 0,
-            deployments)
+        task_rev = "%s:%d" % (env.APP, rev)
+        task_rev_p = green(task_rev, bold=True)
+        print "Expecting %s containers running revision %s" % (yellow(str(expected)), task_rev_p)
 
-        r_count = len(running_new_primaries)
+        stop_oldest_task(env.APP, env.CLUSTER, env.revision)
+        # TODO: wait for elb status?
 
-        if r_count > 0:
-            print "Found %d running primaries with definition %s, resuming." % (r_count, pretty)
-            break
+        while uptodate < expected:
+            uptodate = count_uptodate(env.APP, env.revision)
+            sys.stdout.write(".")
+            sys.stdout.flush()
+            sleep(2)
+        print
+        print "Found one! %s containers running %s" % (green(str(uptodate)), task_rev_p)
 
-        sleep(3)
+def start_new_task(task_rev, cluster):
+    check_output(["aws", "ecs", "run-task", "--cluster", cluster, "--task-definition", task_rev])
+
+
+def get_task_with_taskdef(cluster, task_arn):
+    out = check_output(["aws", "ecs", "describe-tasks", "--cluster", cluster, "--tasks", task_arn])
+    tasks = json.loads(out)["tasks"]
+    assert len(tasks) == 1
+    return (task_arn, tasks[0]["taskDefinitionArn"].split("/")[-1])
+
+def rev_n_from_arn(arn):
+    return int(arn.split("/")[-1].split(":")[1])
+
+def stop_oldest_task(app, cluster, rev):
+    out = check_output(["aws", "ecs", "list-tasks", "--cluster", cluster, "--family", app])
+    taskArns = json.loads(out)["taskArns"]
+    states = map(lambda task: get_task_with_taskdef(cluster, task), taskArns)
+    tasks_not_in_rev = list(filter(lambda t: rev_n_from_arn(t[1]) != rev, states))
+
+    assert tasks_not_in_rev
+    task_arn, old_task_rev = sorted(tasks_not_in_rev, key=lambda x: rev_n_from_arn(x[1]))[0]
+
+    print "Stopping task %s with revision %s" % (yellow(task_arn), old_task_rev)
+    check_output(["aws", "ecs", "stop-task",
+        "--cluster", cluster,
+        "--task", task_arn,
+        "--reason", "automatic deployment, stopping old task"])
+
+def count_uptodate(app, rev):
+    revision_str = "%s:%d" % (app, rev)
+    deployments = describe_service()["deployments"]
+
+    running_new_primaries = \
+        map(lambda x: x["runningCount"],
+        filter(lambda x: x["status"] == "PRIMARY" and x["taskDefinition"].endswith(revision_str),
+        deployments))
+
+    return sum(running_new_primaries)
 
 def describe_service():
     r = capture("aws ecs describe-services --cluster %s --service %s" % (env.CLUSTER, env.SERVICE))
