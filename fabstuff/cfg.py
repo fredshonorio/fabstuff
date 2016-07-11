@@ -23,6 +23,12 @@ def rev(*args):
     assert len(args) == 1, "Requires a single argument"
     env.revision = int(args[0])
 
+@task
+def timeout(*args):
+    """Sets the container timeout"""
+    assert len(args) == 1, "Requires a single argument"
+    env.container_timeout = int(args[0])
+
 def build_dir(version): return "build-docker/%s/" % version
 
 def check_attr(env, attr_name, cfg_task_name, readable_name):
@@ -36,3 +42,4 @@ def check_attr(env, attr_name, cfg_task_name, readable_name):
 revision = lambda env: check_attr(env, "revision",    "rev",  "ecs revision")
 version  = lambda env: check_attr(env, "app_version", "ver",  "application version")
 profile  = lambda env: check_attr(env, "profile",     "prof", "application profile (dev/prod)")
+container_timeout = lambda env: check_attr(env, "container_timeout",    "timeout", "application timeout (in seconds)")

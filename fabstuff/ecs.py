@@ -101,19 +101,30 @@ def update():
         print "Expecting %s containers running revision %s" % (yellow(str(expected)), task_rev_p)
 
         stop_oldest_task(env.APP, env.CLUSTER, env.revision)
-        # TODO: wait for elb status?
 
         while uptodate < expected:
             uptodate = count_uptodate(env.APP, env.revision)
             sys.stdout.write(".")
             sys.stdout.flush()
             sleep(2)
+
+        sleep(cfg.container_timeout(env))
+
+        lb = "%s-container" % env.APP
+        print "Waiting for load balancer %s to be ok"
+
+        while True:
+            o = check_output(["aws", "elb", "describe-instance-health", "--load-balancer", lb])
+            states = json.loads(o)["InstanceStates"]
+            stop = len(list(filter(lambda s: s["State"] == "Inservice", states))) == len(states)
+            if stop: break
+            sleep(2)
+
         print
         print "Found one! %s containers running %s" % (green(str(uptodate)), task_rev_p)
 
 def start_new_task(task_rev, cluster):
     check_output(["aws", "ecs", "run-task", "--cluster", cluster, "--task-definition", task_rev])
-
 
 def get_task_with_taskdef(cluster, task_arn):
     out = check_output(["aws", "ecs", "describe-tasks", "--cluster", cluster, "--tasks", task_arn])

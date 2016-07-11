@@ -21,7 +21,7 @@ long_description = "Hey"
 
 setup(
     name='fabstuff',
-    version='0.0.3',
+    version='0.0.4',
     description='Additions to fabric',
     long_description=long_description,
     url='https://github.com/fredshonorio/fabstuff',
