@@ -93,11 +93,19 @@ def update():
     rev = cfg.revision(env)
     uptodate = count_uptodate(env.APP, rev)
 
+    timeout = cfg.container_timeout(env)
+
+    if timeout <= 0:
+        stop_all(env.APP, env.CLUSTER, env.revision)
+        return
+
     while uptodate < desiredCount:
         expected = uptodate + 1
 
         task_rev = "%s:%d" % (env.APP, rev)
         task_rev_p = green(task_rev, bold=True)
+        # TODO measure time, subtract from timeout
+
         print "Expecting %s containers running revision %s" % (yellow(str(expected)), task_rev_p)
 
         stop_oldest_task(env.APP, env.CLUSTER, env.revision)
@@ -108,20 +116,35 @@ def update():
             sys.stdout.flush()
             sleep(2)
 
-        sleep(cfg.container_timeout(env))
+        sleep(timeout)
 
         lb = "%s-container" % env.APP
-        print "Waiting for load balancer %s to be ok"
+        print
+        print "Waiting for load balancer %s to be ok" % lb
 
         while True:
             o = check_output(["aws", "elb", "describe-instance-health", "--load-balancer", lb])
             states = json.loads(o)["InstanceStates"]
-            stop = len(list(filter(lambda s: s["State"] == "Inservice", states))) == len(states)
+            stop = len(list(filter(lambda s: s["State"] == "InService", states))) >= desiredCount
             if stop: break
             sleep(2)
 
         print
         print "Found one! %s containers running %s" % (green(str(uptodate)), task_rev_p)
+
+# TODO: refactor
+def stop_all(app, cluster, rev):
+    out = check_output(["aws", "ecs", "list-tasks", "--cluster", cluster, "--family", app])
+    taskArns = json.loads(out)["taskArns"]
+    states = map(lambda task: get_task_with_taskdef(cluster, task), taskArns)
+    tasks_not_in_rev = list(filter(lambda t: rev_n_from_arn(t[1]) != rev, states))
+
+    for task_arn, old_task_rev in sorted(tasks_not_in_rev, key=lambda x: rev_n_from_arn(x[1])):
+        print "Stopping task %s with revision %s" % (yellow(task_arn), old_task_rev)
+        check_output(["aws", "ecs", "stop-task",
+            "--cluster", cluster,
+            "--task", task_arn,
+            "--reason", "automatic deployment, stopping old task"])
 
 def start_new_task(task_rev, cluster):
     check_output(["aws", "ecs", "run-task", "--cluster", cluster, "--task-definition", task_rev])
@@ -135,10 +158,15 @@ def get_task_with_taskdef(cluster, task_arn):
 def rev_n_from_arn(arn):
     return int(arn.split("/")[-1].split(":")[1])
 
+# TODO: refactor
 def stop_oldest_task(app, cluster, rev):
     out = check_output(["aws", "ecs", "list-tasks", "--cluster", cluster, "--family", app])
     taskArns = json.loads(out)["taskArns"]
     states = map(lambda task: get_task_with_taskdef(cluster, task), taskArns)
+
+    if not states:
+        return
+
     tasks_not_in_rev = list(filter(lambda t: rev_n_from_arn(t[1]) != rev, states))
 
     assert tasks_not_in_rev
