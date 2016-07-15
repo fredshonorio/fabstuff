@@ -34,11 +34,14 @@ def push():
     """Pushes all versions to the remote docker repo, or a specific version, if specified. Opts: version"""
     import cfg
 
-    version =    cfg.version(env)
-    app_v =      "%s:%s" % (env.APP, version)
+    version    = cfg.version(env)
+    app_v      = "%s:%s" % (env.APP, version)
+    app_latest = "%s:latest" % (env.APP)
 
     confirm("Tagging %s in the remote repo. Press any key to continue" % app_v)
     run("docker tag %s %s/%s" % (app_v, env.DOCKER_REPO, app_v))
+    run("docker tag %s %s/%s" % (app_v, env.DOCKER_REPO, app_latest))
 
     app_v = "%s:%s" % (env.APP, env.app_version) if env.app_version else env.APP
     run("docker push %s/%s" % (env.DOCKER_REPO, app_v))
+    run("docker push %s/%s" % (env.DOCKER_REPO, app_latest))
