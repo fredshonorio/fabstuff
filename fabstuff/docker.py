@@ -8,6 +8,9 @@ from fabric.api import task, env
 from fabric.contrib.console import confirm
 from run import run, cd
 from cfg import build_dir
+from subprocess import check_output as call
+
+def flatten(xss): return [x for xs in xss for x in xs]
 
 @task
 def build(build_args=[], *args):
@@ -20,14 +23,12 @@ def build(build_args=[], *args):
     app_v =      "%s:%s" % (env.APP, version)
     b_dir =      build_dir(version)
 
-    build_args_frag = "" if not build_args else \
-        " ".join(
-            map(lambda t: "--build-arg %s=\"%s\"" % t, build_args)
-        )
+    build_args_frag = [] if not build_args else flatten(map(lambda t: ["--build-arg", "%s=%s" % t], build_args))
 
     with cd(b_dir):
         confirm("Building %s. Continue?" % app_v)
-        run("docker build -f %s -t %s %s ." % (dockerfile, app_v, build_args_frag))
+        # run("docker build -f %s -t %s %s ." % (dockerfile, app_v, build_args_frag))
+        call(["docker", "build", "-f", dockerfile, "-t", app_v] + build_args_frag + ["."])
 
 @task
 def push():
