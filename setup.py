@@ -18,9 +18,13 @@ here = path.abspath(path.dirname(__file__))
 
 long_description = "Hey"
 
+import fabstuff
+
+version = ".".join(map(str, fabstuff.__version__))
+
 setup(
     name='fabstuff',
-    version='0.0.6',
+    version=version,
     description='Additions to fabric',
     long_description=long_description,
     url='https://github.com/fredshonorio/fabstuff',
