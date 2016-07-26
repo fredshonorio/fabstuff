@@ -27,7 +27,7 @@ def build(build_args=[], *args):
 
     with cd(b_dir):
         confirm("Building %s. Continue?" % app_v)
-        call(["docker", "build", "-f", dockerfile, "-t", app_v] + build_args_frag + ["."])
+        call(["docker", "build", "-f", dockerfile, "-t", app_v, "-t",  "%s:latest" % env.APP] + build_args_frag + ["."])
 
 @task
 def push():
