@@ -3,6 +3,7 @@
 from fabric.api import env, task
 import cfg
 from run import run, cd
+from os import path
 
 @task
 def assemble():
@@ -16,4 +17,7 @@ def assemble():
     run("mkdir -p %s" % build)
 
     for f in files:
-        run("cp %s %s" % (f % env, build))
+        expanded_path = f % env
+        recurse = "-r " if path.isdir(expanded_path) else " "
+
+        run("cp %s%s %s" % (recurse, expanded_path, build))
