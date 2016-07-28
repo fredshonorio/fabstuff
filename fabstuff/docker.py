@@ -8,7 +8,7 @@ from fabric.api import task, env
 from fabric.contrib.console import confirm
 from run import run, cd
 from cfg import build_dir
-from subprocess import check_output as call
+from subprocess import call
 
 def flatten(xss): return [x for xs in xss for x in xs]
 
