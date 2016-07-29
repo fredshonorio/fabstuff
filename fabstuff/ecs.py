@@ -50,6 +50,19 @@ def services():
     del s["events"]
     print json.dumps(s, indent=2)
 
+def try_int(x):
+    try:
+        return int(x)
+    except:
+        return x
+
+
+def try_semver(st):
+    split_label = st.split("-")
+    label = [split_label[-1]] if len(split_label) >= 2  else []
+    ver_without_label = split_label[0]
+    return tuple(list(map(try_int, ver_without_label.split("."))) + label)
+
 @task
 def images():
     """Lists ECS services"""
@@ -67,7 +80,7 @@ def images():
         nextToken = obj.get("nextToken")
         first = False
 
-    images = sorted(filter(bool, map(lambda i: i.get("imageTag"), imgs)))
+    images = sorted(filter(bool, map(lambda i: i.get("imageTag"), imgs)), key=try_semver)
 
     for i in images:
         print i
