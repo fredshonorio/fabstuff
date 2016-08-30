@@ -24,9 +24,12 @@ def build(build_args=[], *args):
     b_dir =      build_dir(version)
 
     build_args_frag = [] if not build_args else flatten(map(lambda t: ["--build-arg", "%s=%s" % t], build_args))
+    yes = env.get("yes") or False
 
     with cd(b_dir):
-        confirm("Building %s. Continue?" % app_v)
+        if yes: print("Building %s." % app_v)
+        else:   confirm("Building %s. Continue?" % app_v)
+
         call(["docker", "build", "-f", dockerfile, "-t", app_v, "-t",  "%s:latest" % env.APP] + build_args_frag + ["."])
 
 @task
@@ -38,7 +41,11 @@ def push():
     app_v      = "%s:%s" % (env.APP, version)
     app_latest = "%s:latest" % (env.APP)
 
-    confirm("Tagging %s in the remote repo. Press any key to continue" % app_v)
+    yes = env.get("yes") or False
+
+    if yes: print("Tagging %s in the remote repo." % app_v)
+    else:   confirm("Tagging %s in the remote repo. Press any key to continue" % app_v)
+
     run("docker tag %s %s/%s" % (app_v, env.DOCKER_REPO, app_v))
     run("docker tag %s %s/%s" % (app_v, env.DOCKER_REPO, app_latest))
 

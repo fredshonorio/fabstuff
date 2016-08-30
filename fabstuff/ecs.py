@@ -27,13 +27,17 @@ def update_task_def():
     app_defs = filter(lambda d: ("task-definition/%s" % env.APP) in d, all_defs)
     last_def = sorted(app_defs, key=task_def_revision)[-1]
     last_pretty = pretty_def(last_def)
+    yes = env.get("yes") or False
 
-    confirm("Creating definition based on\n\n\t%(last_pretty)s\n\nusing docker image version %(version)s\nContinue?""" % locals())
+    print("Creating definition based on\n\n\t%(last_pretty)s\n\nusing docker image version %(version)s" % locals())
+    if not yes: confirm("Continue?")
 
     old_def = json.loads(capture("aws ecs describe-task-definition --task-definition %s" % last_def))
     new_def = updated_def_from_old(old_def, image_name_from_version(version, env.DOCKER_REPO))
 
-    confirm("Updated the definition to the following:\n%s\n\nContinue?" % pformat(new_def))
+    print("Updated the definition to the following:\n%s\n" % pformat(new_def))
+    if not yes: confirm("Continue?")
+
     new_def_json = json.dumps(new_def, separators=(',', ':'))
     created = check_output(["aws", "ecs", "register-task-definition", "--cli-input-json", new_def_json])
     rev = json.loads(created)["taskDefinition"]["revision"]
