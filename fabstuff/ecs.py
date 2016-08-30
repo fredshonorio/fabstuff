@@ -131,6 +131,10 @@ def update():
 
     print "Found %s containers running %s" % (green(str(uptodate)), task_rev_p)
 
+@task
+def login():
+    run("bash -c '`aws ecr get-login`'")
+
 def rev_n_from_arn(arn):
     return int(arn.split("/")[-1].split(":")[1])
 
