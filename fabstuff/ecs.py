@@ -14,6 +14,10 @@ from time import sleep
 from run import run, capture
 import cfg
 from subprocess import check_output
+from collections import namedtuple
+
+ALB = namedtuple('ALB', ["group"])
+ELB = namedtuple('ELB', ["name"])
 
 @task(name="update-task")
 def update_task_def():
@@ -96,7 +100,7 @@ def get_desired_count(svc, cluster):
     return int(json.loads(svc_out)["services"][0]["desiredCount"])
 
 @task
-def update():
+def update(onSuccess=None):
     """Updates a docker cluster to a new revision. Reqs: version"""
 
     execute(update_task_def)
@@ -122,18 +126,53 @@ def update():
         sys.stdout.flush()
         sleep(2)
 
-    lb = "%s-container" % env.APP
+    lb = guess_lb(env.APP, env.get("lb"))
+
     print
-    print "Waiting for load balancer %s to be ok" % lb
+    print "Waiting for load balancer %s to be ok" % str(lb)
+
+    wait_for_lb(lb, desiredCount)
+
+    print "Found %s containers running %s" % (green(str(uptodate)), task_rev_p)
+
+    if onSuccess:
+        onSuccess()
+
+def guess_lb(app, target):
+    return target if target \
+        else ELB("%s-container" % env.APP)
+
+def wait_for_lb(lb, dc):
+    if isinstance(lb, ELB):
+        wait_for_elb(lb.name, dc)
+    elif isinstance(lb, ALB):
+        wait_for_alb(lb.group, dc)
+    else:
+        raise ValueError('Unknown lb type ' + str(lb))
+
+def wait_for_alb(group, desiredCount):
+    def assert_single(xs):
+        assert len(xs) == 1
+        return xs
+
+    # get the groups ARN
+    o = check_output(["aws", "elbv2", "describe-target-groups", "--name", group])
+    arn = assert_single(json.loads(o)["TargetGroups"])[0]["TargetGroupArn"]
 
     while True:
-        o = check_output(["aws", "elb", "describe-instance-health", "--load-balancer", lb])
+        o = check_output(["aws", "elbv2", "describe-target-health", "--target-group-arn", arn])
+        states = json.loads(o)["TargetHealthDescriptions"]
+        stop = len(list(filter(lambda s: s["TargetHealth"]["State"] == "healthy", states))) >= desiredCount
+        if stop: break
+        sleep(2)
+
+def wait_for_elb(lbname, desiredCount):
+    while True:
+        o = check_output(["aws", "elb", "describe-instance-health", "--load-balancer", lbname])
         states = json.loads(o)["InstanceStates"]
         stop = len(list(filter(lambda s: s["State"] == "InService", states))) >= desiredCount
         if stop: break
         sleep(2)
-
-    print "Found %s containers running %s" % (green(str(uptodate)), task_rev_p)
 
 @task
 def login():
