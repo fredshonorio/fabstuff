@@ -199,7 +199,10 @@ def describe_service():
     return ss[0]
 
 def task_def_revision(t_def):
-    fragment = "task-definition/%s:" % env.APP
+    return _task_def_revision(t_def, env.APP)
+
+def _task_def_revision(t_def, app):
+    fragment = "task-definition/%s:" % app
     l = len(fragment)
     idx = t_def.index(fragment)
     return int(t_def[idx + l:])
@@ -233,6 +236,7 @@ def updated_def_from_old(old_def, image):
                 # "disableNetworking", "privileged", "readonlyRootFilesystem",
                 # "dnsServers", "dnsSearchDomains", "extraHosts",
                 # "dockerSecurityOptions", "dockerLabels", "ulimits",
+                "logConfiguration": cdef.get("logConfiguration") or {}
                 # "logConfiguration"
             }
         ]
