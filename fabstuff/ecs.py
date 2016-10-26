@@ -219,7 +219,7 @@ def updated_def_from_old(old_def, image):
     assert len(cdefs) == 1
     cdef = cdefs[0]
 
-    return {
+    d = {
         "family": root["family"],
         "containerDefinitions": [
             {
@@ -236,12 +236,17 @@ def updated_def_from_old(old_def, image):
                 # "disableNetworking", "privileged", "readonlyRootFilesystem",
                 # "dnsServers", "dnsSearchDomains", "extraHosts",
                 # "dockerSecurityOptions", "dockerLabels", "ulimits",
-                "logConfiguration": cdef.get("logConfiguration") or {}
                 # "logConfiguration"
             }
         ]
         # elided "volumes"
     }
+
+    logConf = cdef.get("logConfiguration")
+    if logConf:
+        d["containerDefinitions"]["logConfiguration"]
+
+    return d
 
 def pretty_def(defn):
     ss = defn.split("/")
