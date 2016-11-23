@@ -244,7 +244,7 @@ def updated_def_from_old(old_def, image):
 
     logConf = cdef.get("logConfiguration")
     if logConf:
-        d["containerDefinitions"]["logConfiguration"]
+        d["containerDefinitions"][0]["logConfiguration"] = logConf
 
     return d
 
