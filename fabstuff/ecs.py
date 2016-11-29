@@ -25,7 +25,7 @@ def update_task_def():
 
     version = cfg.version(env)
 
-    task_defs_cmd = capture("aws ecs list-task-definitions")
+    task_defs_cmd = capture("aws ecs list-task-definitions --family-prefix %s --sort DESC" % env.APP)
     all_defs = json.loads(task_defs_cmd)["taskDefinitionArns"]
 
     app_defs = filter(lambda d: ("task-definition/%s" % env.APP) in d, all_defs)
