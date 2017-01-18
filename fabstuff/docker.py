@@ -4,6 +4,7 @@
 # Building and publishing docker images
 #
 
+import glob
 from fabric.api import task, env
 from fabric.contrib.console import confirm
 from run import run, cd
@@ -19,7 +20,6 @@ def build(build_args=[], *args):
 
     version =    cfg.version(env)
     profile =    cfg.profile(env)
-    dockerfile = "Dockerfile.%s" % profile
     app_v =      "%s:%s" % (env.APP, version)
     b_dir =      build_dir(version)
 
@@ -27,6 +27,10 @@ def build(build_args=[], *args):
     yes = env.get("yes") or False
 
     with cd(b_dir):
+        dockerfiles = list(glob.glob("Dockerfile*"))
+        assert len(dockerfiles) == 1, "Expecting one Dockerfile*, got " + str(dockerfiles)
+        dockerfile = dockerfiles[0]
+
         if yes: print("Building %s." % app_v)
         else:   confirm("Building %s. Continue?" % app_v)
 

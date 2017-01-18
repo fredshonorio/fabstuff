@@ -1,5 +1,5 @@
 
-__all__ = ["services", "update", "images"]
+__all__ = ["services", "update", "images", "load_task_file"]
 
 #
 # Updating and listing ECS task definitions
@@ -17,11 +17,40 @@ from subprocess import check_output
 from collections import namedtuple
 
 ALB = namedtuple('ALB', ["group"])
-ELB = namedtuple('ELB', ["name"])
+ELB = namedtuple('ELB', ["name"]) # TODO: deprecate
 
-@task(name="update-task")
-def update_task_def():
+def load_task_file(filename, append_to_environment={}):
+    task = json.load(open(filename))
+    assert "family" in task, 'This doesn\'t look like a task definition file, missing "family" field'
+    new_entries = [{"name": key, "value": value} for key, value in append_to_environment.iteritems()]
+    task["containerDefinitions"][0]["environment"] += new_entries
+    return task
+
+@task
+def update_task(task_def):
+    version = cfg.version(env)
+    yes = env.get("yes") or False
+
+    image = image_name_from_version(version, env.DOCKER_REPO)
+    task_def = mutate_image(task_def, image)
+
+    print("Updated the definition to the following:\n%s\n" % pformat(task_def))
+    if not yes: confirm("Continue?")
+
+    task_json = json.dumps(task_def, separators=(',', ':'))
+    created = check_output(["aws", "ecs", "register-task-definition", "--cli-input-json", task_json])
+    rev = json.loads(created)["taskDefinition"]["revision"]
+
+    env.revision = rev
+    print "Success! Created revision %d" % rev
+
+@task(name="update-task") # TODO: deprecate (use only update_task)
+def update_task_def(task_def=None):
     """Copies the most recent task definition (in ECS) to use a given docker image version. Reqs: version"""
+
+    if task_def:
+        execute(update_task, task_def=task_def)
+        return
 
     version = cfg.version(env)
 
@@ -100,33 +129,34 @@ def get_desired_count(svc, cluster):
     return int(json.loads(svc_out)["services"][0]["desiredCount"])
 
 @task
-def update(onSuccess=None):
+def update(onSuccess=None, task_def=None):
     """Updates a docker cluster to a new revision. Reqs: version"""
 
-    execute(update_task_def)
+    execute(update_task_def, task_def=task_def)
+    task_def_family = env.APP if task_def == None else cfg.task_def(env)
 
     check_output(['aws', 'ecs', 'update-service',
         '--cluster', env.CLUSTER,
         '--service', env.SERVICE,
-        '--task-definition', env.APP])
+        '--task-definition', task_def_family])
 
     rev = cfg.revision(env)
 
     uptodate = count_uptodate(env.APP, rev)
     desiredCount = get_desired_count(env.SERVICE, env.CLUSTER)
 
-    task_rev = "%s:%d" % (env.APP, rev)
+    task_rev = "%s:%d" % (task_def_family, rev)
     task_rev_p = green(task_rev, bold=True)
 
     print "Expecting %s containers running revision %s" % (yellow(str(desiredCount)), task_rev_p)
 
     while uptodate < desiredCount:
-        uptodate = count_uptodate(env.APP, env.revision)
+        uptodate = count_uptodate(task_def_family, env.revision)
         sys.stdout.write(".")
         sys.stdout.flush()
         sleep(2)
 
-    lb = guess_lb(env.APP, env.get("lb"))
+    lb = cfg.lb(env)
 
     print
     print "Waiting for load balancer %s to be ok" % str(lb)
@@ -137,10 +167,6 @@ def update(onSuccess=None):
 
     if onSuccess:
         onSuccess()
-
-def guess_lb(app, target):
-    return target if target \
-        else ELB("%s-container" % env.APP)
 
 def wait_for_lb(lb, dc):
     if isinstance(lb, ELB):
@@ -181,8 +207,8 @@ def login():
 def rev_n_from_arn(arn):
     return int(arn.split("/")[-1].split(":")[1])
 
-def count_uptodate(app, rev):
-    revision_str = "%s:%d" % (app, rev)
+def count_uptodate(task_def_family, rev):
+    revision_str = "%s:%d" % (task_def_family, rev)
     deployments = describe_service()["deployments"]
 
     running_new_primaries = \
@@ -209,6 +235,10 @@ def _task_def_revision(t_def, app):
 
 def image_name_from_version(v, repo):
     return "%s/%s:%s" % (repo, env.APP, v)
+
+def mutate_image(task_def, image):
+    task_def["containerDefinitions"][0]["image"] = image
+    return task_def
 
 def updated_def_from_old(old_def, image):
     """Generates an input json for the "aws ecs register-task-definition",
