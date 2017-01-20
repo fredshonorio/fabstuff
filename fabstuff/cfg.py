@@ -59,7 +59,13 @@ def load_profile(profiles): # profile: dict(string, Profile)
     env.lb = prof.lb
     env.task_def = prof.task_def
 
-def load_kv_from_file(filename):
+def load_kv_from_file(*filenames):
+    merged = []
+    for kv in list(map(_load_kv_from_file, filenames)):
+        merged += kv
+    return merged
+
+def _load_kv_from_file(filename):
     def split_at_first(splitter):
         return lambda st: tuple(map(str.strip, st.split(splitter, 1)))
     return map(split_at_first(" "), filter(bool, open(filename).read().splitlines()))
