@@ -93,10 +93,9 @@ def try_int(x):
     except:
         return x
 
-
 def try_semver(st):
     split_label = st.split("-")
-    label = [split_label[-1]] if len(split_label) >= 2  else []
+    label = list(map(try_int, ([split_label[-1]] if len(split_label) >= 2  else [])))
     ver_without_label = split_label[0]
     return tuple(list(map(try_int, ver_without_label.split("."))) + label)
 
