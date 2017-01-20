@@ -19,11 +19,13 @@ from collections import namedtuple
 ALB = namedtuple('ALB', ["group"])
 ELB = namedtuple('ELB', ["name"]) # TODO: deprecate
 
-def load_task_file(filename, append_to_environment={}):
+def load_task_file(filename, family=None, append_to_environment={}):
     task = json.load(open(filename))
     assert "family" in task, 'This doesn\'t look like a task definition file, missing "family" field'
     new_entries = [{"name": key, "value": value} for key, value in append_to_environment.iteritems()]
     task["containerDefinitions"][0]["environment"] += new_entries
+    if family is not None:
+        task["family"] = family
     return task
 
 @task
