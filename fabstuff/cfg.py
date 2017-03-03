@@ -34,7 +34,7 @@ def timeout(*args):
 
 def build_dir(version): return "build-docker/%s/" % version
 
-def check_attr(env, attr_name, cfg_task_name, readable_name):
+def check_and_get(env, attr_name, cfg_task_name, readable_name):
 
     if not hasattr(env, attr_name):
         abort("Must supply %s with task:\n\tfab %s:<%s> <other tasks>" \
@@ -43,12 +43,12 @@ def check_attr(env, attr_name, cfg_task_name, readable_name):
     return getattr(env, attr_name)
 
 # checkers
-revision = lambda env: check_attr(env, "revision",    "rev",  "ecs revision")
-version  = lambda env: check_attr(env, "app_version", "ver",  "application version")
-profile  = lambda env: check_attr(env, "profile",     "prof", "application profile (dev/prod)")
-lb       = lambda env: check_attr(env, "lb",          "",     "")
-task_def = lambda env: check_attr(env, "task_def",    "",     "")
-container_timeout = lambda env: check_attr(env, "container_timeout", "timeout", "application timeout (in seconds)")
+revision = lambda env: check_and_get(env, "revision",    "rev",  "ecs revision")
+version  = lambda env: check_and_get(env, "app_version", "ver",  "application version")
+profile  = lambda env: check_and_get(env, "profile",     "prof", "application profile (dev/prod)")
+lb       = lambda env: check_and_get(env, "lb",          "",     "")
+task_def = lambda env: check_and_get(env, "task_def",    "",     "")
+container_timeout = lambda env: check_and_get(env, "container_timeout", "timeout", "application timeout (in seconds)")
 
 def load_profile(profiles): # profile: dict(string, Profile)
     prof_name = profile(env)
