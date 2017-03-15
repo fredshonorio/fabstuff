@@ -13,12 +13,19 @@ from pprint import pformat
 from time import sleep
 from run import run, capture
 import cfg
+from docker import get_version
 from subprocess import check_output
 from collections import namedtuple
 
 ALB = namedtuple('ALB', ["group"])
 ELB = namedtuple('ELB', ["name"]) # TODO: deprecate
 
+#
+# Reads a json task file with the given filename into a python object.
+# Can set the following sections
+# - containerDefinitions[0].environment - with the values in the append_to_environment dict
+# - family - the the value in the family string
+#
 def load_task_file(filename, family=None, append_to_environment={}):
     task = json.load(open(filename))
     assert "family" in task, 'This doesn\'t look like a task definition file, missing "family" field'
@@ -30,7 +37,7 @@ def load_task_file(filename, family=None, append_to_environment={}):
 
 @task
 def update_task(task_def):
-    version = cfg.version(env)
+    version = get_version(env)
     yes = env.get("yes") or False
 
     image = image_name_from_version(version, env.DOCKER_REPO)
@@ -54,7 +61,7 @@ def update_task_def(task_def=None):
         execute(update_task, task_def=task_def)
         return
 
-    version = cfg.version(env)
+    version = get_version(env)
 
     task_defs_cmd = capture("aws ecs list-task-definitions --family-prefix %s --sort DESC" % env.APP)
     all_defs = json.loads(task_defs_cmd)["taskDefinitionArns"]
@@ -101,8 +108,7 @@ def try_semver(st):
     ver_without_label = split_label[0]
     return tuple(list(map(try_int, ver_without_label.split("."))) + label)
 
-@task
-def images():
+def get_images():
     """Lists ECS services"""
 
     first = True
@@ -119,7 +125,11 @@ def images():
         first = False
 
     images = sorted(filter(bool, map(lambda i: i.get("imageTag"), imgs)), key=try_semver)
+    return images
 
+@task
+def images():
+    images = get_images()
     for i in images:
         print i
 

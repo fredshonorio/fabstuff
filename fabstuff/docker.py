@@ -5,6 +5,7 @@
 #
 
 import glob
+import cfg
 from fabric.api import task, env
 from fabric.contrib.console import confirm
 from run import run, cd
@@ -13,12 +14,19 @@ from subprocess import call
 
 def flatten(xss): return [x for xs in xss for x in xs]
 
+#
+# reads env: version, profile, APP, image_version
+#
+
+def get_version(env):
+    return env.get("image_version") or cfg.version(env)
+
 @task
 def build(build_args=[], *args):
     """Builds a docker image from the current Dockerfile, tags it with a version. Reqs: version"""
     import cfg
 
-    version =    cfg.version(env)
+    version =    get_version(env)
     profile =    cfg.profile(env)
     app_v =      "%s:%s" % (env.APP, version)
     b_dir =      build_dir(version)
@@ -41,7 +49,7 @@ def push():
     """Pushes all versions to the remote docker repo, or a specific version, if specified. Opts: version"""
     import cfg
 
-    version    = cfg.version(env)
+    version    = get_version(env)
     app_v      = "%s:%s" % (env.APP, version)
     app_latest = "%s:latest" % (env.APP)
 
@@ -53,6 +61,5 @@ def push():
     run("docker tag %s %s/%s" % (app_v, env.DOCKER_REPO, app_v))
     run("docker tag %s %s/%s" % (app_v, env.DOCKER_REPO, app_latest))
 
-    app_v = "%s:%s" % (env.APP, env.app_version) if env.app_version else env.APP
     run("docker push %s/%s" % (env.DOCKER_REPO, app_v))
     run("docker push %s/%s" % (env.DOCKER_REPO, app_latest))
