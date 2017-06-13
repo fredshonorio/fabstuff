@@ -11,7 +11,11 @@ from fabric.contrib.console import confirm
 from run import run, cd
 from cfg import build_dir
 from subprocess import call
-import ecs
+
+# fuck it, dup with docker.py
+def env_repo_name():
+    return env.get("REPO_NAME") or env.APP
+
 
 def flatten(xss): return [x for xs in xss for x in xs]
 
@@ -29,7 +33,7 @@ def build(build_args=[], *args):
 
     version =    get_version(env)
     profile =    cfg.profile(env)
-    app_v =      "%s:%s" % (ecs.env_repo_name(), version)
+    app_v =      "%s:%s" % (env_repo_name(), version)
     b_dir =      build_dir(version)
 
     build_args_frag = [] if not build_args else flatten(map(lambda t: ["--build-arg", "%s=%s" % t], build_args))
@@ -43,7 +47,7 @@ def build(build_args=[], *args):
         if yes: print("Building %s." % app_v)
         else:   confirm("Building %s. Continue?" % app_v)
 
-        call(["docker", "build", "-f", dockerfile, "-t", app_v, "-t",  "%s:latest" % ecs.env_repo_name()] + build_args_frag + ["."])
+        call(["docker", "build", "-f", dockerfile, "-t", app_v, "-t",  "%s:latest" % env_repo_name()] + build_args_frag + ["."])
 
 @task
 def push():
@@ -51,8 +55,8 @@ def push():
     import cfg
 
     version    = get_version(env)
-    app_v      = "%s:%s" % (ecs.env_repo_name(), version)
-    app_latest = "%s:latest" % (ecs.env_repo_name())
+    app_v      = "%s:%s" % (env_repo_name(), version)
+    app_latest = "%s:latest" % (env_repo_name())
 
     yes = env.get("yes") or False
 
