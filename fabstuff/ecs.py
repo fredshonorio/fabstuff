@@ -116,7 +116,7 @@ def get_images():
     imgs = []
 
     while nextToken or first:
-        cmd = ["aws", "ecr", "list-images", "--repository-name", env.APP] + \
+        cmd = ["aws", "ecr", "list-images", "--repository-name", env_repo_name()] + \
               ([] if first else ["--next-token", nextToken])
         out = check_output(cmd)
         obj = json.loads(out)
@@ -244,8 +244,11 @@ def _task_def_revision(t_def, app):
     idx = t_def.index(fragment)
     return int(t_def[idx + l:])
 
+def env_repo_name():
+    return env.get("REPO_NAME") or env.APP
+
 def image_name_from_version(v, repo):
-    return "%s/%s:%s" % (repo, env.APP, v)
+    return "%s/%s:%s" % (repo, env_repo_name(), v)
 
 def mutate_image(task_def, image):
     task_def["containerDefinitions"][0]["image"] = image
