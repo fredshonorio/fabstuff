@@ -213,7 +213,7 @@ def wait_for_elb(lbname, desiredCount):
 
 @task
 def login():
-    run("bash -c '`aws ecr get-login`'")
+    run("bash -c '`aws ecr get-login --no-include-email`'")
 
 def rev_n_from_arn(arn):
     return int(arn.split("/")[-1].split(":")[1])
