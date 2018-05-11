@@ -2,16 +2,20 @@
 
 from fabric.api import env, task
 import cfg
-from run import run, cd
+from run import run
 from os import path
 from docker import get_version
+
+# Global reads: semver version, list of project files, build dir
+# Global writes: Nothing
+#
+# Creates build directory (for this version) and moves project files into it
 
 @task
 def assemble():
     """Creates a build/$version directory with the artifacts to bake into the docker image"""
 
     v     = get_version(env)
-    prof  = cfg.profile(env)
     files = env.PROJECT_FILES
     build = cfg.build_dir(v)
 
